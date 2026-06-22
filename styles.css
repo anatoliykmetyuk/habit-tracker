@@ -170,7 +170,7 @@ div:has(.block-language-habittracker),
 
 .habit-tracker {
 	display: grid;
-	grid-template-columns: minmax(min-content, var(--habit-name-max-width)) repeat(
+	grid-template-columns: fit-content(var(--habit-name-max-width)) repeat(
 			var(--date-columns),
 			var(--habit-cell-width)
 		);
