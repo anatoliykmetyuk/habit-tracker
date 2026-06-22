@@ -213,7 +213,9 @@ div:has(.block-language-habittracker),
 }
 
 .habit-tracker__cell {
-	width: var(--habit-cell-width);
+	box-sizing: border-box;
+	width: 100%;
+	min-width: 0;
 	font-size: var(--habit-header-font-size);
 	min-height: var(--habit-cell-height);
 	white-space: nowrap;
@@ -232,7 +234,7 @@ div:has(.block-language-habittracker),
 
 .habit-tracker__cell--name {
 	padding: 0 var(--habit-name-padding);
-	width: auto;
+	width: 100%;
 	max-width: var(--habit-name-max-width);
 	justify-content: start;
 	position: sticky;
@@ -288,11 +290,12 @@ div:has(.block-language-habittracker),
 }
 
 .habit-tick {
+	box-sizing: border-box;
 	line-height: 0;
 	text-align: center;
-	width: var(--habit-cell-width);
-	max-width: var(--habit-cell-width);
-	min-width: var(--habit-cell-width);
+	width: 100%;
+	max-width: none;
+	min-width: 0;
 	padding-left: var(--habit-streak-padding);
 	padding-right: var(--habit-streak-padding);
 	line-height: var(--habit-tick-size);
