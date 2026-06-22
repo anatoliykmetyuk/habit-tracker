@@ -16,6 +16,7 @@ interface HabitTrackerSettings {
 	weeksBehind: number;
 	cellWidth: number;
 	cellHeight: number;
+	showDateTooltips: boolean;
 	debug: boolean;
 	matchLineLength: boolean;
 	defaultColor: string;
@@ -32,6 +33,7 @@ const DEFAULT_SETTINGS: HabitTrackerSettings = {
 	weeksBehind: 0,
 	cellWidth: 25,
 	cellHeight: 32,
+	showDateTooltips: true,
 	debug: false,
 	matchLineLength: true,
 	defaultColor: '',
@@ -460,6 +462,16 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 					inputEl.step = '1';
 				}
 			});
+
+		new Setting(containerEl)
+			.setName('Show date tooltips')
+			.setDesc('Show the full date when hovering over a date header. Can be overridden with "showDateTooltips" in code blocks.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.showDateTooltips)
+				.onChange(async (value) => {
+					this.plugin.settings.showDateTooltips = value;
+					await this.plugin.saveSettings();
+				}));
 
 		new Setting(containerEl)
 			.setName('Default color')

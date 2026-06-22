@@ -258,10 +258,10 @@ div:has(.block-language-habittracker),
 	font-weight: bold;
 }
 
-.habit-tracker__header .habit-tracker__cell[data-ht21-pretty-date] {
+.habit-tracker__header .habit-tracker__cell[data-ht21-date] {
 	position: relative;
 }
-.habit-tracker__header .habit-tracker__cell[data-ht21-pretty-date]:hover {
+.habit-tracker__header .habit-tracker__cell[data-ht21-date]:hover {
 	cursor: pointer;
 	background: var(--habit-header-bg-hover);
 	color: var(--habit-header-text-hover);

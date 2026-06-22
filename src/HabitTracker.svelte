@@ -34,6 +34,7 @@
 		weeksBehind: number
 		cellWidth: number
 		cellHeight: number
+		showDateTooltips: boolean
 		debug: boolean
 		matchLineLength: boolean
 	}
@@ -72,6 +73,7 @@
 		weeksBehind: number
 		cellWidth: number
 		cellHeight: number
+		showDateTooltips: boolean
 		debug: boolean
 		matchLineLength: boolean
 		defaultColor: string
@@ -89,6 +91,7 @@
 		weeksBehind: number
 		cellWidth: number
 		cellHeight: number
+		showDateTooltips: boolean
 		debug: boolean
 		matchLineLength: boolean
 		color: string
@@ -131,6 +134,7 @@
 			weeksBehind,
 			cellWidth: Math.max(25, globalSettings.cellWidth ?? 25),
 			cellHeight: Math.max(32, globalSettings.cellHeight ?? 32),
+			showDateTooltips: globalSettings.showDateTooltips ?? true,
 			debug: globalSettings.debug,
 			matchLineLength: globalSettings.matchLineLength,
 		}
@@ -206,6 +210,10 @@
 				32,
 				userSettings.cellHeight ?? globalSettings.cellHeight ?? 32,
 			),
+			showDateTooltips:
+				userSettings.showDateTooltips ??
+				globalSettings.showDateTooltips ??
+				true,
 			matchLineLength:
 				userSettings.matchLineLength !== undefined
 					? userSettings.matchLineLength
@@ -537,7 +545,9 @@
 						date,
 					)}{isToday(date) ? ' habit-tracker__cell--today' : ''}"
 					data-ht21-date={date}
-					data-ht21-pretty-date={renderPrettyDate(date)}
+					data-ht21-pretty-date={state.settings.showDateTooltips
+						? renderPrettyDate(date)
+						: undefined}
 					on:click={() => openDailyNote(date)}
 				>
 					{getDate(parseISO(date))}
