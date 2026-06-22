@@ -6,7 +6,7 @@
 		getAllDailyNotes,
 		appHasDailyNotesPluginLoaded,
 	} from 'obsidian-daily-notes-interface'
-	import {onMount, onDestroy, tick} from 'svelte'
+	import {onMount, onDestroy} from 'svelte'
 
 	import Habit from './Habit.svelte'
 
@@ -146,96 +146,6 @@
 			start: parseISO(state.settings.firstDisplayedDate),
 			end: parseISO(state.settings.lastDisplayedDate),
 		}).map((date) => getDateAsString(date))
-	}
-
-	const updateNameColumnWidth = async () => {
-		await tick()
-		if (!state.ui.rootElement) return
-
-		if (!nameObserver) {
-			nameObserver = new MutationObserver(() => {
-				void updateNameColumnWidth()
-			})
-			nameObserver.observe(state.ui.rootElement, {
-				childList: true,
-				subtree: true,
-				characterData: true,
-			})
-		}
-
-		const links = Array.from(
-			state.ui.rootElement.querySelectorAll<HTMLElement>(
-				'.habit-tracker__cell--name .internal-link',
-			),
-		)
-		if (!links.length) return
-
-		const sampleStyle = getComputedStyle(links[0])
-		const rootStyle = getComputedStyle(state.ui.rootElement)
-		const padding =
-			Number.parseFloat(
-				rootStyle.getPropertyValue('--habit-name-padding'),
-			) || 0
-
-		const measure = document.body.createSpan()
-		measure.style.position = 'fixed'
-		measure.style.visibility = 'hidden'
-		measure.style.pointerEvents = 'none'
-		measure.style.whiteSpace = 'nowrap'
-		measure.style.font = sampleStyle.font
-		measure.style.letterSpacing = sampleStyle.letterSpacing
-		document.body.appendChild(measure)
-
-		const measureText = (text: string) => {
-			measure.textContent = text
-			return measure.getBoundingClientRect().width + padding * 2 + 2
-		}
-		const titleWidths = links.map((link) =>
-			measureText(link.textContent || ''),
-		)
-		const wordWidths = links.flatMap((link) =>
-			(link.textContent || '')
-				.split(/\s+/)
-				.filter(Boolean)
-				.map(measureText),
-		)
-		measure.remove()
-
-		const longestTitle = Math.max(...titleWidths)
-		const longestWord = Math.max(...wordWidths, 0)
-		const pane = state.ui.rootElement.closest<HTMLElement>(
-			'.workspace-leaf-content, .view-content',
-		)
-		if (pane && !paneResizeObserver) {
-			paneResizeObserver = new ResizeObserver(() => {
-				void updateNameColumnWidth()
-			})
-			paneResizeObserver.observe(pane)
-		}
-		const rootRect = state.ui.rootElement.getBoundingClientRect()
-		const paneRect = pane?.getBoundingClientRect()
-		const paneStyle = pane ? getComputedStyle(pane) : null
-		const paneRightPadding = Number.parseFloat(
-			paneStyle?.paddingRight || '0',
-		)
-		const contentWidth = paneRect
-			? paneRect.right - rootRect.left - paneRightPadding
-			: window.innerWidth - rootRect.left
-		const summaryWidth = state.computed.habits.some((habit) => habit.numeric)
-			? Math.max(56, state.settings.cellWidth)
-			: 0
-		const fixedColumnsWidth =
-			state.computed.dates.length * state.settings.cellWidth + summaryWidth
-		const availableNameWidth = contentWidth - fixedColumnsWidth
-		const width = Math.min(
-			longestTitle,
-			Math.max(longestWord, availableNameWidth),
-		)
-
-		state.ui.rootElement.style.setProperty(
-			'--habit-name-width',
-			`${Math.ceil(width)}px`,
-		)
 	}
 
 	const toHabitData = (file: TFile): HabitData => ({
@@ -417,7 +327,6 @@
 		}
 
 		debugLog(`Initialization completed successfully`, state.settings.debug)
-		void updateNameColumnWidth()
 	}
 
 	const navigate = (direction: -1 | 1) => {
@@ -542,8 +451,6 @@
 	let vaultDeleteRef: any
 	let vaultRenameRef: any
 	let midnightTimer: ReturnType<typeof setTimeout>
-	let nameObserver: MutationObserver
-	let paneResizeObserver: ResizeObserver
 
 	const isInWatchedPath = (filePath: string) =>
 		filePath === state.settings.path ||
@@ -573,8 +480,6 @@
 		// Listen for refresh events at the document level
 		document.addEventListener('habit-tracker-refresh', refreshEventListener)
 		debugLog('Refresh event listener added to document')
-
-		window.addEventListener('resize', updateNameColumnWidth)
 
 		// Schedule reload at midnight so dates stay current
 		const scheduleMidnightReload = () => {
@@ -614,9 +519,6 @@
 		if (vaultDeleteRef) app.vault.offref(vaultDeleteRef)
 		if (vaultRenameRef) app.vault.offref(vaultRenameRef)
 		if (midnightTimer) clearTimeout(midnightTimer)
-		if (nameObserver) nameObserver.disconnect()
-		if (paneResizeObserver) paneResizeObserver.disconnect()
-		window.removeEventListener('resize', updateNameColumnWidth)
 	})
 
 	init(userSettings)

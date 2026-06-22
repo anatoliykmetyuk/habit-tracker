@@ -30,7 +30,6 @@ div:has(.block-language-habittracker),
 	--habit-cell-width: 25px;
 	--habit-cell-height: 32px;
 	--habit-summary-width: max(56px, var(--habit-cell-width));
-	--habit-name-max-width: clamp(140px, 30vw, 280px);
 	--habit-name-padding: 8px;
 
 	/* Tick size */
@@ -169,23 +168,36 @@ div:has(.block-language-habittracker),
 	scrollbar-width: thin;
 }
 
+/*
+ * The name column is sized by CSS Grid's intrinsic sizing rather than
+ * a JS measurement:
+ *   - min-content of a name cell = its widest unbreakable token (longest
+ *     word), because the inner .internal-link has overflow-wrap: normal
+ *     and word-break: normal. If those are ever changed to break-word,
+ *     min-content collapses to a single character and this column will
+ *     shrink pathologically — keep them in sync.
+ *   - max-content = the title as one un-wrapped line.
+ * The track is minmax(min-content, max-content). With width: 100% on the
+ * grid, the name track gets whatever space is left after the fixed date
+ * and summary columns. If there's room, the track hits max-content and
+ * titles stay on one line. If not, it shrinks toward min-content and the
+ * inner link wraps on whitespace, so titles break to multiple lines
+ * instead of pushing the table past the pane. The outer container's
+ * max-width: 100% + overflow-x: auto still handles the case where even
+ * min-content + fixed columns exceeds the pane.
+ */
 .habit-tracker {
 	display: grid;
-	grid-template-columns: var(
-			--habit-name-width,
-			fit-content(var(--habit-name-max-width))
-		)
-		repeat(
-			var(--date-columns),
-			var(--habit-cell-width)
-		);
-	width: fit-content;
+	grid-template-columns:
+		minmax(min-content, max-content)
+		repeat(var(--date-columns), var(--habit-cell-width));
+	width: 100%;
 	background-color: var(--habit-bg);
 }
 
 .habit-tracker--with-summary {
 	grid-template-columns:
-		var(--habit-name-width, fit-content(var(--habit-name-max-width)))
+		minmax(min-content, max-content)
 		repeat(var(--date-columns), var(--habit-cell-width))
 		var(--habit-summary-width);
 }
@@ -246,8 +258,6 @@ div:has(.block-language-habittracker),
 
 .habit-tracker__cell--name {
 	padding: 0 var(--habit-name-padding);
-	width: 100%;
-	max-width: var(--habit-name-width, var(--habit-name-max-width));
 	justify-content: start;
 	position: sticky;
 	left: 0;
