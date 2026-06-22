@@ -408,9 +408,17 @@ div:has(.block-language-habitoptions),
 	border-top-right-radius: var(--habit-streak-radius);
 	border-bottom-right-radius: var(--habit-streak-radius);
 }
-.habit-tick--streak + .habit-tick--streak-end .habit-tick__inner,
+.habit-tick--streak:not(.habit-tick--numeric) + .habit-tick--streak-end:not(.habit-tick--numeric) .habit-tick__inner,
 .habit-tick--streak-count .habit-tick__inner {
 	font-weight: bold;
+}
+/* Override: numeric end cells must never be bold. The + rule above
+   uses :not() which Obsidian's CSS layer occasionally serves stale, and
+   in any case we want an explicit reset rather than relying on exclusion
+   from a sibling combinator. */
+.habit-tick--numeric.habit-tick--streak-end .habit-tick__inner,
+.habit-tick--streak + .habit-tick--numeric.habit-tick--streak-end .habit-tick__inner {
+	font-weight: normal;
 }
 
 .habit-tick--streak-gap .habit-tick__inner {
