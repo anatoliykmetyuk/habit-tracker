@@ -587,7 +587,7 @@
 					class="habit-tracker__cell habit-tracker__cell--weekly-summary"
 					title="Weekly total"
 				>
-					Week
+					W
 				</div>
 			{/if}
 		</div>

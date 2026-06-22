@@ -297,6 +297,7 @@ div:has(.block-language-habitoptions),
 	padding: 2px 4px;
 	line-height: 1.1;
 	overflow-wrap: anywhere;
+	font-weight: bold;
 }
 
 .habit-tracker__header .habit-tracker__cell[data-ht21-date] {
