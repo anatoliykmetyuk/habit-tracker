@@ -84,74 +84,80 @@
 	}
 
 	$: renderedDates = (() => {
-		if (isNumeric) {
-			return dates.map((date) => {
-				const entry = findEntry(entries, date)
-				const hasValue = entry !== undefined && isFiniteNumber(entry.value)
-				const value = hasValue ? entry.value : null
-				const completed =
-					hasValue &&
-					value !== null &&
-					(numericDailyObjective === null ||
-						value >= numericDailyObjective)
-				const classes = [
-					'habit-tracker__cell',
-					`habit-tracker__cell--${getDayOfTheWeek(date)}`,
-					'habit-tick',
-					'habit-tick--numeric',
-				]
-				if (hasValue) classes.push('habit-tick--numeric-recorded')
-				if (completed) classes.push('habit-tick--ticked')
-
-				return {
-					date,
-					value,
-					hasValue,
-					completed,
-					display: hasValue ? formatNumericValue(value) : '',
-					classes: classes.join(' '),
-				}
-			})
-		}
-
-		const maxGap = Number(frontmatter.maxGap) || 0
-		const entryDates = new Set(entries.map((e) => e.date))
+		// Numeric habits strictly ignore maxGap — the user wants a tight
+		// pill with no gap days. Non-numeric habits honour frontmatter.maxGap.
+		const maxGap = isNumeric ? 0 : Number(frontmatter.maxGap) || 0
 		const gapStyle =
 			userSettings.gapStyle !== undefined
 				? userSettings.gapStyle
 				: globalSettings.gapStyle
 
-		// Pass 1 — mark each date
+		// entries is guaranteed sorted by date by the entries.ts helpers
+		// (both normalizeEntries on read and upsertEntry/removeEntry on
+		// write), so we can iterate it chronologically without re-sorting.
+		const entryDateList = entries.map((e) => e.date)
+		const entryDates = new Set(entryDateList)
+
+		// For numeric, precompute the (date -> value) lookup once.
+		const numericValueByDate = new Map()
+		if (isNumeric) {
+			for (const e of entries) {
+				if (isFiniteNumber(e.value)) {
+					numericValueByDate.set(e.date, e.value)
+				}
+			}
+		}
+
+		// Pass 1 — mark each date with ticked, gap, hasValue, value
 		const days = dates.map((date) => {
-			const ticked = entryDates.has(date)
+			let ticked
 			let gap = false
-			if (!ticked && maxGap > 0) {
-				// Gap only between consecutive entries whose gap ≤ maxGap
-				const parsed = parseISO(date)
-				for (let i = 0; i < entries.length - 1; i++) {
-					const prev = parseISO(entries[i].date)
-					const next = parseISO(entries[i + 1].date)
-					if (
-						differenceInCalendarDays(parsed, prev) > 0 &&
-						differenceInCalendarDays(next, parsed) > 0
-					) {
-						if (differenceInCalendarDays(next, prev) - 1 <= maxGap) {
-							gap = true
+			let hasValue = false
+			let value = null
+
+			if (isNumeric) {
+				hasValue = numericValueByDate.has(date)
+				value = hasValue ? numericValueByDate.get(date) : null
+				ticked =
+					hasValue &&
+					value !== null &&
+					(numericDailyObjective === null ||
+						value >= numericDailyObjective)
+			} else {
+				ticked = entryDates.has(date)
+				if (!ticked && maxGap > 0) {
+					// Gap only between consecutive entries whose gap ≤ maxGap.
+					// entryDateList is sorted, so consecutive array indices
+					// are also consecutive in time.
+					const parsed = parseISO(date)
+					for (let i = 0; i < entryDateList.length - 1; i++) {
+						const prev = parseISO(entryDateList[i])
+						const next = parseISO(entryDateList[i + 1])
+						if (
+							differenceInCalendarDays(parsed, prev) > 0 &&
+							differenceInCalendarDays(next, parsed) > 0
+						) {
+							if (differenceInCalendarDays(next, prev) - 1 <= maxGap) {
+								gap = true
+							}
+							break
 						}
-						break
 					}
 				}
 			}
+
 			return {
 				date,
 				ticked,
 				gap,
+				hasValue,
+				value,
 				deadline: false,
-				title: '',
 				streakStart: false,
 				streakEnd: false,
 				streakCount: 0,
 				classes: '',
+				display: hasValue ? formatNumericValue(value) : '',
 			}
 		})
 
@@ -178,16 +184,14 @@
 				// streakStart: only if the streak truly begins here
 				// (no entry within maxGap before the first visible date)
 				if (firstTickDate) {
-					const firstTickIdx = entries.findIndex(
-						(e) => e.date === firstTickDate,
-					)
-					const prevEntry =
-						firstTickIdx > 0 ? entries[firstTickIdx - 1] : null
+					const firstTickIdx = entryDateList.indexOf(firstTickDate)
+					const prevEntryDate =
+						firstTickIdx > 0 ? entryDateList[firstTickIdx - 1] : null
 					const continuesFromBefore =
-						prevEntry &&
+						prevEntryDate &&
 						differenceInCalendarDays(
 							parseISO(firstTickDate),
-							parseISO(prevEntry.date),
+							parseISO(prevEntryDate),
 						) -
 							1 <=
 							maxGap
@@ -200,15 +204,15 @@
 
 				// streakEnd: only if the streak truly ends within the visible range
 				if (lastTickDate) {
-					const lastTickIdx = entries.findIndex(
-						(e) => e.date === lastTickDate,
-					)
-					const nextEntry =
-						lastTickIdx < entries.length - 1 ? entries[lastTickIdx + 1] : null
+					const lastTickIdx = entryDateList.indexOf(lastTickDate)
+					const nextEntryDate =
+						lastTickIdx < entryDateList.length - 1
+							? entryDateList[lastTickIdx + 1]
+							: null
 					const continuesAfter =
-						nextEntry &&
+						nextEntryDate &&
 						differenceInCalendarDays(
-							parseISO(nextEntry.date),
+							parseISO(nextEntryDate),
 							parseISO(lastTickDate),
 						) -
 							1 <=
@@ -220,19 +224,18 @@
 					days[endIdx].streakEnd = true
 				}
 
-				// Count: walk backward through entries from the last visible tick
+				// Count: walk backward through entries from the last visible
+				// tick. With maxGap=0 (numeric), any gap > 0 breaks the count.
 				let count = 0
 				if (lastTickDate) {
-					const anchorIdx = entries.findIndex(
-						(e) => e.date === lastTickDate,
-					)
+					const anchorIdx = entryDateList.indexOf(lastTickDate)
 					if (anchorIdx !== -1) {
 						count = 1
 						for (let j = anchorIdx; j > 0; j--) {
 							const gapDays =
 								differenceInCalendarDays(
-									parseISO(entries[j].date),
-									parseISO(entries[j - 1].date),
+									parseISO(entryDateList[j]),
+									parseISO(entryDateList[j - 1]),
 								) - 1
 							if (gapDays > maxGap) break
 							count++
@@ -246,12 +249,13 @@
 			}
 		}
 
-		// Pass 3 — ghost dot on the last day of the gap (deadline to keep streak alive)
-		if (maxGap > 0 && entries.length > 0) {
+		// Pass 3 — ghost dot on the last day of the gap (deadline to keep
+		// streak alive). Non-numeric only — numeric has no maxGap.
+		if (!isNumeric && maxGap > 0 && entryDateList.length > 0) {
 			const today = format(new Date(), 'yyyy-MM-dd')
-			const lastEntry = entries[entries.length - 1]
+			const lastEntryDate = entryDateList[entryDateList.length - 1]
 			const deadlineDate = format(
-				new Date(parseISO(lastEntry.date).getTime() + (maxGap + 1) * 86400000),
+				new Date(parseISO(lastEntryDate).getTime() + (maxGap + 1) * 86400000),
 				'yyyy-MM-dd',
 			)
 			if (deadlineDate >= today) {
@@ -262,14 +266,17 @@
 			}
 		}
 
-		// Build classes
+		// Build classes — same streak classes for both numeric and
+		// non-numeric so the pill renders the same way regardless of mode.
 		for (const day of days) {
 			const cls = [
 				'habit-tracker__cell',
 				`habit-tracker__cell--${getDayOfTheWeek(day.date)}`,
 				'habit-tick',
 			]
+			if (isNumeric) cls.push('habit-tick--numeric')
 			if (day.ticked) cls.push('habit-tick--ticked')
+			if (isNumeric && day.hasValue) cls.push('habit-tick--numeric-recorded')
 			if (showStreaks) {
 				const inStrk = day.ticked || day.gap
 				if (inStrk) cls.push('habit-tick--streak')

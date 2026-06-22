@@ -387,6 +387,12 @@ div:has(.block-language-habitoptions),
 .habit-tick--streak .habit-tick__inner {
 	border-radius: 0;
 }
+/* Numeric cells get a 2px inner padding by default (for breathing room
+   around the value). For streak cells we want the inner flush to the
+   cell edges so the pill connects cleanly with no gap. */
+.habit-tick--numeric.habit-tick--streak .habit-tick__inner {
+	padding: 0;
+}
 
 .habit-tick--streak-start {
 	padding-left: var(--habit-streak-padding);

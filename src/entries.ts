@@ -5,9 +5,14 @@
 // is a boolean completion; an entry with a value records a number for
 // that day. The same habit can mix both.
 //
-// Core invariant: any mutation touches exactly one day. Helpers below
-// return new arrays and preserve every other entry by reference, so
-// callers can never accidentally rewrite the whole list.
+// Two invariants the helpers below maintain together:
+//   1. any mutation touches exactly one day — helpers return new arrays
+//      and preserve every other entry by reference, so callers can never
+//      accidentally rewrite the whole list
+//   2. entries are always sorted by date (ascending). This is enforced
+//      both on read (normalizeEntries) and on write (upsertEntry,
+//      removeEntry) so the streak logic in Habit.svelte can safely
+//      walk the array chronologically regardless of click order
 
 export type Entry = { date: string; value?: number; [k: string]: unknown }
 
@@ -28,6 +33,10 @@ export function isFiniteNumber(n: unknown): n is number {
  *   - legacy format: array of date strings
  * Returns [] for anything else. The old `{date: value}` object map is
  * intentionally not supported.
+ *
+ * This is the only function in the codebase that should ever pull the
+ * raw `entries` value out of frontmatter. It also sorts the result so
+ * downstream code can assume chronological order.
  */
 export function normalizeEntries(raw: unknown): Entry[] {
 	if (!Array.isArray(raw)) return []
@@ -55,7 +64,16 @@ export function normalizeEntries(raw: unknown): Entry[] {
 			result.push(entry)
 		}
 	}
-	return result
+	return sortEntries(result)
+}
+
+/**
+ * Return a new array with entries sorted by date (ascending). The
+ * yyyy-MM-dd date format sorts correctly under lexicographic order, so
+ * a string compare is sufficient and avoids the cost of parsing.
+ */
+export function sortEntries(entries: Entry[]): Entry[] {
+	return [...entries].sort((a, b) => a.date.localeCompare(b.date))
 }
 
 export function findEntry(
@@ -71,7 +89,9 @@ export function hasEntry(entries: Entry[], date: string): boolean {
 
 /**
  * Returns a new array with the entry for `date` updated or inserted.
- * All other entries are preserved by reference.
+ * All other entries are preserved by reference. The result is sorted
+ * by date, so callers don't have to worry about click order leaking
+ * into the array order.
  */
 export function upsertEntry(
 	entries: Entry[],
@@ -79,18 +99,20 @@ export function upsertEntry(
 	patch: Partial<Entry>,
 ): Entry[] {
 	const idx = entries.findIndex((e) => e.date === date)
+	let result: Entry[]
 	if (idx === -1) {
-		return [...entries, { date, ...patch }]
+		result = [...entries, { date, ...patch }]
+	} else {
+		result = entries.slice()
+		result[idx] = { ...entries[idx], ...patch, date }
 	}
-	const result = entries.slice()
-	result[idx] = { ...entries[idx], ...patch, date }
-	return result
+	return sortEntries(result)
 }
 
 /**
  * Returns a new array without the entry for `date`. All other entries
- * are preserved by reference.
+ * are preserved by reference. The result is sorted by date.
  */
 export function removeEntry(entries: Entry[], date: string): Entry[] {
-	return entries.filter((e) => e.date !== date)
+	return sortEntries(entries.filter((e) => e.date !== date))
 }
