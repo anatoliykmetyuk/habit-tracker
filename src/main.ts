@@ -14,6 +14,8 @@ interface HabitTrackerSettings {
 	weeklyView: boolean;
 	weeksAhead: number;
 	weeksBehind: number;
+	cellWidth: number;
+	cellHeight: number;
 	debug: boolean;
 	matchLineLength: boolean;
 	defaultColor: string;
@@ -28,6 +30,8 @@ const DEFAULT_SETTINGS: HabitTrackerSettings = {
 	weeklyView: false,
 	weeksAhead: 1,
 	weeksBehind: 0,
+	cellWidth: 25,
+	cellHeight: 32,
 	debug: false,
 	matchLineLength: true,
 	defaultColor: '',
@@ -414,6 +418,48 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 					}
 				});
 		}
+
+		new Setting(containerEl)
+			.setName('Cell width')
+			.setDesc('Width of each date cell in pixels. Minimum 25. Can be overridden with "cellWidth" in code blocks.')
+			.addText(text => text
+				.setValue(this.plugin.settings.cellWidth.toString())
+				.onChange(async (value) => {
+					const numValue = parseInt(value);
+					if (!isNaN(numValue) && numValue >= 25) {
+						this.plugin.settings.cellWidth = numValue;
+						await this.plugin.saveSettings();
+					}
+				}))
+			.then(setting => {
+				const inputEl = setting.controlEl.querySelector('input') as HTMLInputElement;
+				if (inputEl) {
+					inputEl.type = 'number';
+					inputEl.min = '25';
+					inputEl.step = '1';
+				}
+			});
+
+		new Setting(containerEl)
+			.setName('Cell height')
+			.setDesc('Height of each tracker cell in pixels. Minimum 32. Can be overridden with "cellHeight" in code blocks.')
+			.addText(text => text
+				.setValue(this.plugin.settings.cellHeight.toString())
+				.onChange(async (value) => {
+					const numValue = parseInt(value);
+					if (!isNaN(numValue) && numValue >= 32) {
+						this.plugin.settings.cellHeight = numValue;
+						await this.plugin.saveSettings();
+					}
+				}))
+			.then(setting => {
+				const inputEl = setting.controlEl.querySelector('input') as HTMLInputElement;
+				if (inputEl) {
+					inputEl.type = 'number';
+					inputEl.min = '32';
+					inputEl.step = '1';
+				}
+			});
 
 		new Setting(containerEl)
 			.setName('Default color')

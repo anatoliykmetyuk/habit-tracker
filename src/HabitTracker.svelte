@@ -32,6 +32,8 @@
 		weeklyView: boolean
 		weeksAhead: number
 		weeksBehind: number
+		cellWidth: number
+		cellHeight: number
 		debug: boolean
 		matchLineLength: boolean
 	}
@@ -68,6 +70,8 @@
 		weeklyView: boolean
 		weeksAhead: number
 		weeksBehind: number
+		cellWidth: number
+		cellHeight: number
 		debug: boolean
 		matchLineLength: boolean
 		defaultColor: string
@@ -83,6 +87,8 @@
 		weeklyView: boolean
 		weeksAhead: number
 		weeksBehind: number
+		cellWidth: number
+		cellHeight: number
 		debug: boolean
 		matchLineLength: boolean
 		color: string
@@ -123,6 +129,8 @@
 			weeklyView,
 			weeksAhead,
 			weeksBehind,
+			cellWidth: Math.max(25, globalSettings.cellWidth ?? 25),
+			cellHeight: Math.max(32, globalSettings.cellHeight ?? 32),
 			debug: globalSettings.debug,
 			matchLineLength: globalSettings.matchLineLength,
 		}
@@ -190,6 +198,14 @@
 			weeklyView,
 			weeksAhead,
 			weeksBehind,
+			cellWidth: Math.max(
+				25,
+				userSettings.cellWidth ?? globalSettings.cellWidth ?? 25,
+			),
+			cellHeight: Math.max(
+				32,
+				userSettings.cellHeight ?? globalSettings.cellHeight ?? 32,
+			),
 			matchLineLength:
 				userSettings.matchLineLength !== undefined
 					? userSettings.matchLineLength
@@ -507,7 +523,8 @@
 		class="habit-tracker {state.settings.matchLineLength
 			? 'habit-tracker--match-line-length'
 			: ''}"
-		style="--date-columns: {state.computed.dates.length}"
+		style="--date-columns: {state.computed.dates.length}; --habit-cell-width: {state
+			.settings.cellWidth}px; --habit-cell-height: {state.settings.cellHeight}px"
 		bind:this={state.ui.rootElement}
 	>
 		<div class="habit-tracker__header habit-tracker__row">
