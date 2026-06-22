@@ -2,7 +2,7 @@
 	import {debugLog, isValidCSSColor} from './utils'
 
 	import {onDestroy} from 'svelte'
-	import {parseYaml, TFile} from 'obsidian'
+	import {Modal, Notice, parseYaml, Setting, TFile} from 'obsidian'
 	import {getDayOfTheWeek} from './utils'
 	import {differenceInCalendarDays, parseISO, format} from 'date-fns'
 
@@ -14,8 +14,11 @@
 	export let pluginName
 	export let userSettings
 	export let globalSettings
+	export let showWeeklySummary = false
+	export let weeklySummaryDates = []
 
 	let entries = []
+	let numericEntries = {}
 	let frontmatter = {}
 	let habitName = name
 	let customStyles = ''
@@ -35,8 +38,70 @@
 		userSettings.showStreaks !== undefined
 			? userSettings.showStreaks
 			: globalSettings.showStreaks
+	$: isNumeric = frontmatter.numeric === true
+	$: numericMetric =
+		frontmatter['numeric-metric'] === undefined ||
+		frontmatter['numeric-metric'] === null
+			? ''
+			: String(frontmatter['numeric-metric'])
+	$: numericDailyObjective = getOptionalNumber(
+		frontmatter['numeric-daily-objective'],
+	)
+	$: numericWeeklyObjective = getOptionalNumber(
+		frontmatter['numeric-weekly-objective'],
+	)
+
+	const getOptionalNumber = (value) => {
+		if (value === undefined || value === null || value === '') return null
+		const parsed = Number(value)
+		return Number.isFinite(parsed) ? parsed : null
+	}
+
+	const normalizeNumber = (value) =>
+		Math.round((Number(value) + Number.EPSILON) * 1e10) / 1e10
+
+	const formatNumber = (value) => {
+		if (!Number.isFinite(value)) return ''
+		return Number.isInteger(value)
+			? String(value)
+			: String(Number(value.toFixed(10)))
+	}
+
+	const formatNumericValue = (value) =>
+		`${formatNumber(value)}${numericMetric}`
+
+	const hasNumericEntry = (date) =>
+		Object.prototype.hasOwnProperty.call(numericEntries, date)
 
 	$: renderedDates = (() => {
+		if (isNumeric) {
+			return dates.map((date) => {
+				const hasValue = hasNumericEntry(date)
+				const value = hasValue ? numericEntries[date] : null
+				const completed =
+					hasValue &&
+					(numericDailyObjective === null ||
+						value >= numericDailyObjective)
+				const classes = [
+					'habit-tracker__cell',
+					`habit-tracker__cell--${getDayOfTheWeek(date)}`,
+					'habit-tick',
+					'habit-tick--numeric',
+				]
+				if (hasValue) classes.push('habit-tick--numeric-recorded')
+				if (completed) classes.push('habit-tick--ticked')
+
+				return {
+					date,
+					value,
+					hasValue,
+					completed,
+					display: hasValue ? formatNumericValue(value) : '',
+					classes: classes.join(' '),
+				}
+			})
+		}
+
 		const maxGap = Number(frontmatter.maxGap) || 0
 		const entrySet = new Set(entries)
 		const gapStyle =
@@ -205,6 +270,35 @@
 		return days
 	})()
 
+	$: weeklyTotal = isNumeric
+		? normalizeNumber(
+				weeklySummaryDates.reduce(
+					(total, date) =>
+						total + (hasNumericEntry(date) ? numericEntries[date] : 0),
+					0,
+				),
+			)
+		: 0
+	$: weeklyCompleted =
+		isNumeric &&
+		(numericWeeklyObjective === null ||
+			weeklyTotal >= numericWeeklyObjective)
+
+	const normalizeNumericEntries = (rawEntries) => {
+		if (Array.isArray(rawEntries)) {
+			return Object.fromEntries(
+				rawEntries.map((date) => [String(date), 1]),
+			)
+		}
+		if (!rawEntries || typeof rawEntries !== 'object') return {}
+
+		return Object.fromEntries(
+			Object.entries(rawEntries)
+				.map(([date, value]) => [date, Number(value)])
+				.filter(([, value]) => Number.isFinite(value)),
+		)
+	}
+
 	const init = async function () {
 		debugLog(`Loading habit ${habitName}`, debug, undefined, pluginName)
 
@@ -249,12 +343,154 @@
 		frontmatter = await getFrontmatter(path)
 		debugLog(`Frontmatter for ${path} ↴`, debug)
 		debugLog(frontmatter, debug)
-		entries = frontmatter.entries
-		entries = entries.sort()
+		if (frontmatter.numeric === true) {
+			numericEntries = normalizeNumericEntries(frontmatter.entries)
+			entries = []
+		} else {
+			entries = Array.isArray(frontmatter.entries)
+				? frontmatter.entries.map(String).sort()
+				: []
+			numericEntries = {}
+		}
 		habitName = frontmatter.title || habitName
 
-		debugLog(`Habit "${habitName}": Found ${entries.length} entries`, debug)
-		debugLog(entries, debug, undefined, pluginName)
+		const entryCount = isNumeric
+			? Object.keys(numericEntries).length
+			: entries.length
+		debugLog(`Habit "${habitName}": Found ${entryCount} entries`, debug)
+		debugLog(
+			isNumeric ? numericEntries : entries,
+			debug,
+			undefined,
+			pluginName,
+		)
+	}
+
+	const saveNumericEntry = async (date, value) => {
+		const file = app.vault.getAbstractFileByPath(path)
+		if (!file || !(file instanceof TFile)) {
+			new Notice(`${pluginName}: file missing while saving numeric entry`)
+			return
+		}
+
+		const nextEntries = {...numericEntries}
+		if (value === null) {
+			delete nextEntries[date]
+		} else {
+			nextEntries[date] = normalizeNumber(value)
+		}
+		numericEntries = Object.fromEntries(
+			Object.entries(nextEntries).sort(([a], [b]) => a.localeCompare(b)),
+		)
+
+		savingChanges = true
+		await app.fileManager.processFrontMatter(file, (nextFrontmatter) => {
+			nextFrontmatter.entries = numericEntries
+		})
+	}
+
+	const openNumericEntryModal = (date) => {
+		const currentValue = hasNumericEntry(date) ? numericEntries[date] : null
+		const displayDate = window.moment(date).format('ddd, ll')
+
+		class NumericEntryModal extends Modal {
+			onOpen() {
+				this.titleEl.setText(`${habitName} · ${displayDate}`)
+				const {contentEl} = this
+				contentEl.addClass('ht21-numeric-entry-modal')
+				contentEl.createDiv({
+					cls: 'ht21-numeric-entry-modal__current',
+					text:
+						currentValue === null
+							? 'No value recorded'
+							: `Current: ${formatNumericValue(currentValue)}`,
+				})
+
+				let setValue = currentValue === null ? '' : String(currentValue)
+				let addValue = ''
+
+				const applySetValue = async () => {
+					const parsed = Number(setValue)
+					if (setValue.trim() === '' || !Number.isFinite(parsed)) {
+						new Notice('Enter a valid number to set the total')
+						return
+					}
+					await saveNumericEntry(date, parsed)
+					this.close()
+				}
+
+				const applyAddValue = async () => {
+					const parsed = Number(addValue)
+					if (addValue.trim() === '' || !Number.isFinite(parsed)) {
+						new Notice('Enter a valid number to add')
+						return
+					}
+					await saveNumericEntry(
+						date,
+						normalizeNumber((currentValue ?? 0) + parsed),
+					)
+					this.close()
+				}
+
+				new Setting(contentEl)
+					.setName('Set total')
+					.setDesc('Replace the recorded value for this day.')
+					.addText((text) => {
+						text.setValue(setValue).setPlaceholder('0')
+						text.inputEl.type = 'number'
+						text.inputEl.step = 'any'
+						text.inputEl.inputMode = 'decimal'
+						text.onChange((value) => {
+							setValue = value
+						})
+						text.inputEl.addEventListener('keydown', (event) => {
+							if (event.key === 'Enter') applySetValue()
+						})
+					})
+					.addButton((button) =>
+						button
+							.setButtonText('Set')
+							.setCta()
+							.onClick(applySetValue),
+					)
+
+				new Setting(contentEl)
+					.setName('Add amount')
+					.setDesc('Add to the existing value without replacing it.')
+					.addText((text) => {
+						text.setPlaceholder('0')
+						text.inputEl.type = 'number'
+						text.inputEl.step = 'any'
+						text.inputEl.inputMode = 'decimal'
+						text.onChange((value) => {
+							addValue = value
+						})
+						text.inputEl.addEventListener('keydown', (event) => {
+							if (event.key === 'Enter') applyAddValue()
+						})
+					})
+					.addButton((button) =>
+						button.setButtonText('Add').onClick(applyAddValue),
+					)
+
+				if (currentValue !== null) {
+					new Setting(contentEl)
+						.setName('Clear entry')
+						.setDesc('Remove the recorded value for this day.')
+						.addButton((button) =>
+							button
+								.setButtonText('Clear')
+								.setWarning()
+								.onClick(async () => {
+									await saveNumericEntry(date, null)
+									this.close()
+								}),
+						)
+				}
+			}
+		}
+
+		new NumericEntryModal(app).open()
 	}
 
 	const toggleHabit = function (date) {
@@ -340,12 +576,48 @@
 				ticked={day.ticked}
 				on:mouseenter={(e) => showTooltip(e, day)}
 				on:mouseleave={hideTooltip}
-				on:click={() => toggleHabit(day.date)}
+				on:click={() =>
+					isNumeric
+						? openNumericEntryModal(day.date)
+						: toggleHabit(day.date)}
 			>
 				<span
 					class="habit-tick__inner"
-				>{#if showStreaks && day.streakEnd && day.streakCount > 1}{day.streakCount}{/if}</span>
+					title={isNumeric && day.hasValue
+						? numericDailyObjective === null
+							? formatNumericValue(day.value)
+							: `${formatNumericValue(day.value)} / ${formatNumericValue(
+									numericDailyObjective,
+								)}`
+						: undefined}
+				>
+					{#if isNumeric}
+						{day.display}
+					{:else if showStreaks && day.streakEnd && day.streakCount > 1}
+						{day.streakCount}
+					{/if}
+				</span>
 			</div>
 		{/each}
+	{/if}
+	{#if showWeeklySummary}
+		<div
+			class="habit-tracker__cell habit-tracker__cell--weekly-summary {isNumeric
+				? 'habit-tracker__cell--numeric-summary'
+				: ''} {weeklyCompleted ? 'habit-tick--ticked' : ''}"
+			title={isNumeric
+				? numericWeeklyObjective === null
+					? `Weekly total: ${formatNumericValue(weeklyTotal)}`
+					: `Weekly total: ${formatNumericValue(
+							weeklyTotal,
+						)} / ${formatNumericValue(numericWeeklyObjective)}`
+				: undefined}
+		>
+			{#if isNumeric}
+				<span class="habit-tick__inner">
+					{formatNumericValue(weeklyTotal)}
+				</span>
+			{/if}
+		</div>
 	{/if}
 </div>

@@ -29,6 +29,7 @@ div:has(.block-language-habittracker),
 	/* Cell dimensions */
 	--habit-cell-width: 25px;
 	--habit-cell-height: 32px;
+	--habit-summary-width: max(56px, var(--habit-cell-width));
 	--habit-name-max-width: clamp(140px, 30vw, 280px);
 	--habit-name-padding: 8px;
 
@@ -170,12 +171,23 @@ div:has(.block-language-habittracker),
 
 .habit-tracker {
 	display: grid;
-	grid-template-columns: fit-content(var(--habit-name-max-width)) repeat(
+	grid-template-columns: var(
+			--habit-name-width,
+			fit-content(var(--habit-name-max-width))
+		)
+		repeat(
 			var(--date-columns),
 			var(--habit-cell-width)
 		);
 	width: fit-content;
 	background-color: var(--habit-bg);
+}
+
+.habit-tracker--with-summary {
+	grid-template-columns:
+		var(--habit-name-width, fit-content(var(--habit-name-max-width)))
+		repeat(var(--date-columns), var(--habit-cell-width))
+		var(--habit-summary-width);
 }
 
 .habit-tracker-navigation {
@@ -235,7 +247,7 @@ div:has(.block-language-habittracker),
 .habit-tracker__cell--name {
 	padding: 0 var(--habit-name-padding);
 	width: 100%;
-	max-width: var(--habit-name-max-width);
+	max-width: var(--habit-name-width, var(--habit-name-max-width));
 	justify-content: start;
 	position: sticky;
 	left: 0;
@@ -256,6 +268,24 @@ div:has(.block-language-habittracker),
 .habit-tracker__cell--sunday {
 	background-color: var(--habit-highlight-weekend);
 	font-weight: bold;
+}
+
+.habit-tracker__cell--weekly-summary {
+	padding: 0 4px;
+	font-size: var(--habit-header-font-size);
+	line-height: 1.1;
+	text-align: center;
+}
+
+.habit-tracker__cell--numeric-summary .habit-tick__inner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: var(--habit-tick-size);
+	height: auto;
+	padding: 2px 4px;
+	line-height: 1.1;
+	overflow-wrap: anywhere;
 }
 
 .habit-tracker__header .habit-tracker__cell[data-ht21-date] {
@@ -309,6 +339,27 @@ div:has(.block-language-habittracker),
 	display: block;
 	height: var(--habit-tick-size);
 	width: 100%;
+}
+
+.habit-tick--numeric {
+	padding: 3px;
+	line-height: 1.1;
+}
+
+.habit-tick--numeric .habit-tick__inner {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	min-height: var(--habit-tick-size);
+	height: auto;
+	padding: 2px;
+	line-height: 1.1;
+	overflow-wrap: anywhere;
+}
+
+.habit-tick--numeric-recorded:not(.habit-tick--ticked)
+	.habit-tick__inner {
+	color: var(--text-normal);
 }
 
 .habit-tick--ticked .habit-tick__inner {
@@ -406,4 +457,27 @@ div:has(.block-language-habittracker),
 
 .habit-tracker__header .habit-tracker__cell--today {
 	color: var(--habit-name-text-color);
+}
+
+.ht21-numeric-entry-modal__current {
+	margin-bottom: var(--size-4-3);
+	color: var(--text-muted);
+}
+
+@media (max-width: 480px) {
+	.ht21-numeric-entry-modal .setting-item {
+		align-items: stretch;
+		flex-direction: column;
+		gap: var(--size-4-2);
+	}
+
+	.ht21-numeric-entry-modal .setting-item-control {
+		justify-content: stretch;
+		width: 100%;
+	}
+
+	.ht21-numeric-entry-modal input {
+		flex: 1;
+		min-width: 0;
+	}
 }

@@ -72,6 +72,27 @@ Examples:
 
 Invalid colors are ignored and the default theme color is used.
 
+### Numeric Habits
+
+Set `numeric: true` to record a number instead of a boolean completion:
+
+```markdown
+---
+title: "Focused Work"
+numeric: true
+numeric-metric: h
+numeric-daily-objective: 2
+numeric-weekly-objective: 10
+entries:
+  "2026-06-22": 1.5
+  "2026-06-23": 2
+---
+```
+
+Clicking a numeric cell opens an editor with separate controls to replace the
+day's total or add an amount to it. Numeric habits display their weekly total
+in the rightmost column and do not display streak counts.
+
 ### Streak Gap Tolerance
 
 By default, a single missed day breaks a streak. Use `maxGap` to keep a streak visually intact across short gaps — useful for habits where occasional misses are acceptable (e.g. a rest day in a workout routine):
@@ -143,12 +164,16 @@ Override global settings in individual code blocks:
 
 ### Per-Habit Settings (frontmatter)
 
-| Setting   | Type   | Default | Description                                                                                  |
-| --------- | ------ | ------- | -------------------------------------------------------------------------------------------- |
-| `title`   | string | ""      | Custom display name. Falls back to filename if not set                                       |
-| `color`   | string | ""      | Custom color for this habit (hex, RGB, or CSS color name)                                    |
-| `maxGap`  | number | 0       | Allow up to N consecutive missed days within a streak. Gap days show at reduced opacity; only actual ticked days are counted |
-| `entries` | array  | []      | Array of completed dates in YYYY-MM-DD format. Managed automatically when clicking the grid  |
+| Setting | Type | Default | Description |
+| ------- | ---- | ------- | ----------- |
+| `title` | string | "" | Custom display name. Falls back to filename if not set |
+| `color` | string | "" | Custom color for this habit (hex, RGB, or CSS color name) |
+| `maxGap` | number | 0 | Allow up to N consecutive missed days within a streak. Gap days show at reduced opacity; only actual ticked days are counted |
+| `numeric` | boolean | false | Record numeric values instead of boolean completions |
+| `numeric-metric` | string | "" | Suffix displayed after numeric values, such as `h` or `x` |
+| `numeric-daily-objective` | number | unset | Color a daily value as completed only when it reaches this target |
+| `numeric-weekly-objective` | number | unset | Color the weekly total as completed only when it reaches this target |
+| `entries` | array or object | [] | Boolean habits use a date array. Numeric habits use a date-to-number object |
 
 ## Usage Examples
 
