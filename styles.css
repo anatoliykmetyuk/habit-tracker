@@ -459,25 +459,33 @@ div:has(.block-language-habittracker),
 	color: var(--habit-name-text-color);
 }
 
-.ht21-numeric-entry-modal__current {
-	margin-bottom: var(--size-4-3);
-	color: var(--text-muted);
-}
-
-@media (max-width: 480px) {
+@media (max-width: 560px) {
 	.ht21-numeric-entry-modal .setting-item {
 		align-items: stretch;
 		flex-direction: column;
 		gap: var(--size-4-2);
 	}
 
-	.ht21-numeric-entry-modal .setting-item-control {
-		justify-content: stretch;
+	.ht21-numeric-entry-modal .setting-item-info {
 		width: 100%;
 	}
 
-	.ht21-numeric-entry-modal input {
-		flex: 1;
+	.ht21-numeric-entry-modal .setting-item-control {
+		align-items: stretch;
+		display: flex;
+		flex-direction: column;
+		gap: var(--size-4-2);
+		width: 100%;
+	}
+
+	.ht21-numeric-entry-modal .setting-item-control input {
+		flex: 1 1 auto;
 		min-width: 0;
+		width: 100%;
+	}
+
+	.ht21-numeric-entry-modal .setting-item-control button {
+		align-self: flex-start;
+		width: auto;
 	}
 }
