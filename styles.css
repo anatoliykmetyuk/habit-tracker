@@ -376,6 +376,7 @@ div:has(.block-language-habitoptions),
 
 .habit-tick--ticked .habit-tick__inner {
 	background: var(--habit-bg-ticked);
+	transition: all 0.3s ease;
 	color: var(--habit-icon-ticked);
 	border-radius: var(--habit-tick-roundess);
 }
