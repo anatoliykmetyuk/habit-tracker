@@ -11,6 +11,9 @@ import { debugLog, isValidCSSColor } from './utils'
 interface HabitTrackerSettings {
 	path: string;
 	daysToShow: number;
+	weeklyView: boolean;
+	weeksAhead: number;
+	weeksBehind: number;
 	debug: boolean;
 	matchLineLength: boolean;
 	defaultColor: string;
@@ -22,6 +25,9 @@ interface HabitTrackerSettings {
 const DEFAULT_SETTINGS: HabitTrackerSettings = {
 	path: '',
 	daysToShow: 21,
+	weeklyView: false,
+	weeksAhead: 1,
+	weeksBehind: 0,
 	debug: false,
 	matchLineLength: true,
 	defaultColor: '',
@@ -334,26 +340,80 @@ class HabitTrackerSettingTab extends PluginSettingTab {
 			});
 
 		new Setting(containerEl)
-			.setName('Days to show')
-			.setDesc('Number of days to display in the habit tracker. Can be overridden with "daysToShow" in code blocks.')
-			.addText(text => text
-				.setValue(this.plugin.settings.daysToShow.toString())
+			.setName('Weekly View')
+			.setDesc('Display the current Monday-to-Sunday week, including upcoming dates. Can be overridden with "weeklyView" in code blocks.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.weeklyView)
 				.onChange(async (value) => {
-					const numValue = parseInt(value);
-					if (!isNaN(numValue) && numValue > 0) {
-						this.plugin.settings.daysToShow = numValue;
-						await this.plugin.saveSettings();
+					this.plugin.settings.weeklyView = value;
+					await this.plugin.saveSettings();
+					this.display();
+				}));
+
+		if (this.plugin.settings.weeklyView) {
+			new Setting(containerEl)
+				.setName('Weeks ahead')
+				.setDesc('Number of weeks to display starting with the current week. Minimum 1. Can be overridden with "weeksAhead" in code blocks.')
+				.addText(text => text
+					.setValue(this.plugin.settings.weeksAhead.toString())
+					.onChange(async (value) => {
+						const numValue = parseInt(value);
+						if (!isNaN(numValue) && numValue >= 1) {
+							this.plugin.settings.weeksAhead = numValue;
+							await this.plugin.saveSettings();
+						}
+					}))
+				.then(setting => {
+					const inputEl = setting.controlEl.querySelector('input') as HTMLInputElement;
+					if (inputEl) {
+						inputEl.type = 'number';
+						inputEl.min = '1';
+						inputEl.step = '1';
 					}
-				}))
-			.then(setting => {
-				// Add number input attributes
-				const inputEl = setting.controlEl.querySelector('input') as HTMLInputElement;
-				if (inputEl) {
-					inputEl.type = 'number';
-					inputEl.min = '1';
-					inputEl.step = '1';
-				}
-			});
+				});
+
+			new Setting(containerEl)
+				.setName('Weeks behind')
+				.setDesc('Number of full weeks to display before the current week. Minimum 0. Can be overridden with "weeksBehind" in code blocks.')
+				.addText(text => text
+					.setValue(this.plugin.settings.weeksBehind.toString())
+					.onChange(async (value) => {
+						const numValue = parseInt(value);
+						if (!isNaN(numValue) && numValue >= 0) {
+							this.plugin.settings.weeksBehind = numValue;
+							await this.plugin.saveSettings();
+						}
+					}))
+				.then(setting => {
+					const inputEl = setting.controlEl.querySelector('input') as HTMLInputElement;
+					if (inputEl) {
+						inputEl.type = 'number';
+						inputEl.min = '0';
+						inputEl.step = '1';
+					}
+				});
+		} else {
+			new Setting(containerEl)
+				.setName('Days to show')
+				.setDesc('Number of days to display in the habit tracker. Can be overridden with "daysToShow" in code blocks.')
+				.addText(text => text
+					.setValue(this.plugin.settings.daysToShow.toString())
+					.onChange(async (value) => {
+						const numValue = parseInt(value);
+						if (!isNaN(numValue) && numValue > 0) {
+							this.plugin.settings.daysToShow = numValue;
+							await this.plugin.saveSettings();
+						}
+					}))
+				.then(setting => {
+					const inputEl = setting.controlEl.querySelector('input') as HTMLInputElement;
+					if (inputEl) {
+						inputEl.type = 'number';
+						inputEl.min = '1';
+						inputEl.step = '1';
+					}
+				});
+		}
 
 		new Setting(containerEl)
 			.setName('Default color')

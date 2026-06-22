@@ -136,11 +136,17 @@ div:has(.block-language-habittracker),
 	padding: 0;
 	font-family: monospace;
 	position: relative;
+	box-sizing: border-box;
+	width: max-content;
+	max-width: 100%;
 }
 
 /* Ensure code blocks in source view also support the action bar */
 .cm-lang-habittracker {
 	position: relative;
+	box-sizing: border-box;
+	width: max-content;
+	max-width: 100%;
 }
 .cm-preview-code-block.markdown-rendered:has(
 		.block-language-habittracker
@@ -155,15 +161,16 @@ div:has(.block-language-habittracker),
 .block-language-habittracker {
 	border: var(--habit-outer-border);
 	border-radius: var(--radius-s);
-	overflow-x: scroll;
-	width: fit-content;
+	box-sizing: border-box;
+	overflow-x: auto;
+	width: max-content !important;
 	max-width: 100%;
 	scrollbar-width: thin;
 }
 
 .habit-tracker {
 	display: grid;
-	grid-template-columns: 1fr repeat(
+	grid-template-columns: max-content repeat(
 			var(--date-columns),
 			var(--habit-cell-width)
 		);
@@ -171,10 +178,30 @@ div:has(.block-language-habittracker),
 	background-color: var(--habit-bg);
 }
 
-.is-readable-line-width .habit-tracker--match-line-length {
-	min-width: calc(
-		var(--file-line-width) - 2px
-	); /* TODO: this is a hack since I know the widht of the border. but it won't scale. figure out a way to fix this that hopefully doesn't break overrides people added in place */
+.habit-tracker-navigation {
+	position: sticky;
+	left: var(--habit-name-padding);
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	width: max-content;
+	padding: 6px var(--habit-name-padding);
+	background: var(--habit-bg);
+	border-top: var(--habit-horizontal-border);
+}
+
+.habit-tracker-navigation__button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 24px;
+	padding: 0;
+	color: var(--text-muted);
+}
+
+.habit-tracker-navigation__button:hover {
+	color: var(--text-normal);
 }
 
 .habit-tracker__row {
@@ -205,8 +232,7 @@ div:has(.block-language-habittracker),
 
 .habit-tracker__cell--name {
 	padding: 0 var(--habit-name-padding);
-	width: 100%;
-	max-width: var(--habit-name-max-width);
+	width: auto;
 	justify-content: start;
 	position: sticky;
 	left: 0;
@@ -215,21 +241,11 @@ div:has(.block-language-habittracker),
 }
 .habit-tracker__cell--name .internal-link {
 	color: var(--habit-name-text-color);
-	max-width: 100%;
-	overflow: hidden;
-	text-overflow: ellipsis;
 	white-space: nowrap;
-	width: fit-content;
 	display: inline-block;
 	font-size: var(--habit-name-font-size);
 	text-decoration: none;
 }
-.is-readable-line-width
-	.habit-tracker--match-line-length
-	.habit-tracker__cell--name {
-	max-width: 100%;
-}
-
 .habit-tracker__cell--saturday,
 .habit-tracker__cell--sunday {
 	background-color: var(--habit-highlight-weekend);

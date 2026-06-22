@@ -13,11 +13,13 @@
 	import {TFile, TFolder, Notice, type Plugin} from 'obsidian'
 	import {getDateAsString, getDayOfTheWeek} from './utils.js'
 	import {
+		addDays,
 		eachDayOfInterval,
-		format,
+		endOfWeek,
 		getDate,
 		isToday,
 		parseISO,
+		startOfWeek,
 		subDays,
 	} from 'date-fns'
 
@@ -27,6 +29,9 @@
 		firstDisplayedDate: string
 		lastDisplayedDate: string
 		daysToShow: number
+		weeklyView: boolean
+		weeksAhead: number
+		weeksBehind: number
 		debug: boolean
 		matchLineLength: boolean
 	}
@@ -60,6 +65,9 @@
 		path: string
 		firstDisplayedDate: string
 		daysToShow: number
+		weeklyView: boolean
+		weeksAhead: number
+		weeksBehind: number
 		debug: boolean
 		matchLineLength: boolean
 		defaultColor: string
@@ -70,8 +78,11 @@
 	export let userSettings: Partial<{
 		path: string
 		firstDisplayedDate: string
-		lastDisplayedDate: Date
+		lastDisplayedDate: string
 		daysToShow: number
+		weeklyView: boolean
+		weeksAhead: number
+		weeksBehind: number
 		debug: boolean
 		matchLineLength: boolean
 		color: string
@@ -80,16 +91,49 @@
 	}>
 
 	// Default settings - use global settings as defaults
-	const createDefaultSettings = (): HabitTrackerSettings => ({
-		path: globalSettings.path,
-		firstDisplayedDate:
-			globalSettings.firstDisplayedDate ||
-			getDateAsString(subDays(new Date(), globalSettings.daysToShow - 1)),
-		lastDisplayedDate: getDateAsString(new Date()),
-		daysToShow: globalSettings.daysToShow,
-		debug: globalSettings.debug,
-		matchLineLength: globalSettings.matchLineLength,
-	})
+	const createDefaultSettings = (): HabitTrackerSettings => {
+		const today = new Date()
+		const weeklyView = globalSettings.weeklyView
+		const weeksAhead = Math.max(1, globalSettings.weeksAhead ?? 1)
+		const weeksBehind = Math.max(0, globalSettings.weeksBehind ?? 0)
+		const lastDisplayedDate = weeklyView
+			? getDateAsString(
+					addDays(
+						endOfWeek(today, {weekStartsOn: 1}),
+						(weeksAhead - 1) * 7,
+					),
+				)
+			: getDateAsString(today)
+
+		return {
+			path: globalSettings.path,
+			firstDisplayedDate: weeklyView
+				? getDateAsString(
+						addDays(
+							startOfWeek(today, {weekStartsOn: 1}),
+							-weeksBehind * 7,
+						),
+					)
+				: globalSettings.firstDisplayedDate ||
+					getDateAsString(subDays(today, globalSettings.daysToShow - 1)),
+			lastDisplayedDate,
+			daysToShow: weeklyView
+				? (weeksAhead + weeksBehind) * 7
+				: globalSettings.daysToShow,
+			weeklyView,
+			weeksAhead,
+			weeksBehind,
+			debug: globalSettings.debug,
+			matchLineLength: globalSettings.matchLineLength,
+		}
+	}
+
+	const updateDates = () => {
+		state.computed.dates = eachDayOfInterval({
+			start: parseISO(state.settings.firstDisplayedDate),
+			end: parseISO(state.settings.lastDisplayedDate),
+		}).map((date) => getDateAsString(date))
+	}
 
 	// Initialize unified state
 	let state: HabitTrackerState = {
@@ -115,17 +159,37 @@
 		const hasExplicitFirstDate = userSettings.firstDisplayedDate !== undefined
 		const hasExplicitLastDate = userSettings.lastDisplayedDate !== undefined
 		const hasExplicitDaysToShow = userSettings.daysToShow !== undefined
+		const weeklyView =
+			userSettings.weeklyView !== undefined
+				? userSettings.weeklyView
+				: state.settings.weeklyView
+		const weeksAhead = Math.max(
+			1,
+			userSettings.weeksAhead ?? globalSettings.weeksAhead ?? 1,
+		)
+		const weeksBehind = Math.max(
+			0,
+			userSettings.weeksBehind ?? globalSettings.weeksBehind ?? 0,
+		)
+		const defaultLastDisplayedDate = weeklyView
+			? state.settings.lastDisplayedDate
+			: getDateAsString(new Date())
 
 		// Start with defaults
 		let resolvedSettings = {
 			path: userSettings.path || state.settings.path,
 			firstDisplayedDate: '',
 			lastDisplayedDate:
-				userSettings.lastDisplayedDate || state.settings.lastDisplayedDate,
+				userSettings.lastDisplayedDate || defaultLastDisplayedDate,
 			daysToShow:
 				userSettings.daysToShow !== undefined
 					? userSettings.daysToShow
-					: state.settings.daysToShow,
+					: weeklyView
+						? 7
+						: globalSettings.daysToShow,
+			weeklyView,
+			weeksAhead,
+			weeksBehind,
 			matchLineLength:
 				userSettings.matchLineLength !== undefined
 					? userSettings.matchLineLength
@@ -136,8 +200,23 @@
 					: state.settings.debug,
 		}
 
-		// Apply smart firstDisplayedDate logic
-		if (hasExplicitFirstDate) {
+		// Weekly view is always a complete Monday-to-Sunday week.
+		if (weeklyView) {
+			const today = new Date()
+			resolvedSettings.firstDisplayedDate = getDateAsString(
+				addDays(
+					startOfWeek(today, {weekStartsOn: 1}),
+					-weeksBehind * 7,
+				),
+			)
+			resolvedSettings.lastDisplayedDate = getDateAsString(
+				addDays(
+					endOfWeek(today, {weekStartsOn: 1}),
+					(weeksAhead - 1) * 7,
+				),
+			)
+			resolvedSettings.daysToShow = (weeksAhead + weeksBehind) * 7
+		} else if (hasExplicitFirstDate) {
 			// User provided firstDisplayedDate - use it directly
 			resolvedSettings.firstDisplayedDate = userSettings.firstDisplayedDate!
 			// If user also provided lastDisplayedDate, recalculate daysToShow to match the actual range
@@ -159,7 +238,14 @@
 			)
 		} else {
 			// No explicit user settings - use defaults
-			resolvedSettings.firstDisplayedDate = state.settings.firstDisplayedDate
+			resolvedSettings.firstDisplayedDate =
+				globalSettings.firstDisplayedDate ||
+				getDateAsString(
+					subDays(
+						parseISO(resolvedSettings.lastDisplayedDate),
+						resolvedSettings.daysToShow - 1,
+					),
+				)
 		}
 
 		state.settings = resolvedSettings
@@ -174,10 +260,7 @@
 		}
 		debugLog(state.settings, state.settings.debug)
 
-		state.computed.dates = eachDayOfInterval({
-			start: parseISO(state.settings.firstDisplayedDate),
-			end: parseISO(state.settings.lastDisplayedDate),
-		}).map((date) => getDateAsString(date))
+		updateDates()
 
 		debugLog(`Will show habits for the following dates:`, state.settings.debug)
 		debugLog(state.computed.dates, state.settings.debug)
@@ -211,6 +294,18 @@
 		}
 
 		debugLog(`Initialization completed successfully`, state.settings.debug)
+	}
+
+	const navigate = (direction: -1 | 1) => {
+		const increment = state.settings.weeklyView ? 7 : 1
+		state.settings.firstDisplayedDate = getDateAsString(
+			addDays(parseISO(state.settings.firstDisplayedDate), direction * increment),
+		)
+		state.settings.lastDisplayedDate = getDateAsString(
+			addDays(parseISO(state.settings.lastDisplayedDate), direction * increment),
+		)
+		updateDates()
+		state = {...state}
 	}
 
 	const scrollToEnd = function () {
@@ -444,5 +539,25 @@
 				{globalSettings}
 			></Habit>
 		{/each}
+	</div>
+	<div class="habit-tracker-navigation">
+		<button
+			type="button"
+			class="clickable-icon habit-tracker-navigation__button"
+			aria-label={state.settings.weeklyView ? 'Previous week' : 'Previous day'}
+			title={state.settings.weeklyView ? 'Previous week' : 'Previous day'}
+			on:click={() => navigate(-1)}
+		>
+			<span aria-hidden="true">&larr;</span>
+		</button>
+		<button
+			type="button"
+			class="clickable-icon habit-tracker-navigation__button"
+			aria-label={state.settings.weeklyView ? 'Next week' : 'Next day'}
+			title={state.settings.weeklyView ? 'Next week' : 'Next day'}
+			on:click={() => navigate(1)}
+		>
+			<span aria-hidden="true">&rarr;</span>
+		</button>
 	</div>
 {/if}
