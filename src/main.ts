@@ -2,6 +2,7 @@
 import {Plugin, Notice, setIcon, App, PluginSettingTab, Setting} from 'obsidian'
 import HabitTracker from './HabitTracker.svelte'
 import HabitTrackerError from './HabitTrackerError.svelte'
+import HabitOptions from './HabitOptions.svelte'
 import { debugLog, isValidCSSColor } from './utils'
 
 	import {
@@ -86,6 +87,40 @@ export default class HabitTracker21 extends Plugin {
 				console.error(`[${this.manifest.name}] Received invalid settings. ${error}`)
 			}
 		})
+
+		this.registerMarkdownCodeBlockProcessor(
+			'habitoptions',
+			async (src, el, ctx) => {
+				debugLog('Loading habitoptions', 1)
+
+				// The block body must be empty; the target file is the note
+				// containing the codeblock.
+				if (!ctx.sourcePath) {
+					new HabitTrackerError({
+						target: el,
+						props: {
+							error: new Error(
+								'habitoptions could not determine the current file path.',
+							),
+							src,
+							pluginName: this.manifest.name,
+							app: this.app,
+							globalSettings: this.settings,
+						},
+					})
+					return
+				}
+
+				new HabitOptions({
+					target: el,
+					props: {
+						app: this.app,
+						path: ctx.sourcePath,
+						pluginName: this.manifest.name,
+					},
+				})
+			},
+		)
 
 		// Add hover action bars to habit tracker code blocks
 		this.addHoverActionBars()

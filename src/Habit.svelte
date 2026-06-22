@@ -5,6 +5,14 @@
 	import {Modal, Notice, parseYaml, Setting, TFile} from 'obsidian'
 	import {getDayOfTheWeek} from './utils'
 	import {differenceInCalendarDays, parseISO, format} from 'date-fns'
+	import {
+		normalizeEntries,
+		findEntry,
+		hasEntry,
+		upsertEntry,
+		removeEntry,
+		isFiniteNumber,
+	} from './entries'
 
 	export let app
 	export let name
@@ -17,8 +25,8 @@
 	export let showWeeklySummary = false
 	export let weeklySummaryDates = []
 
+	/** @type {import('./entries').Entry[]} */
 	let entries = []
-	let numericEntries = {}
 	let frontmatter = {}
 	let habitName = name
 	let customStyles = ''
@@ -70,16 +78,20 @@
 	const formatNumericValue = (value) =>
 		`${formatNumber(value)}${numericMetric}`
 
-	const hasNumericEntry = (date) =>
-		Object.prototype.hasOwnProperty.call(numericEntries, date)
+	const hasNumericEntry = (date) => {
+		const entry = findEntry(entries, date)
+		return entry !== undefined && isFiniteNumber(entry.value)
+	}
 
 	$: renderedDates = (() => {
 		if (isNumeric) {
 			return dates.map((date) => {
-				const hasValue = hasNumericEntry(date)
-				const value = hasValue ? numericEntries[date] : null
+				const entry = findEntry(entries, date)
+				const hasValue = entry !== undefined && isFiniteNumber(entry.value)
+				const value = hasValue ? entry.value : null
 				const completed =
 					hasValue &&
+					value !== null &&
 					(numericDailyObjective === null ||
 						value >= numericDailyObjective)
 				const classes = [
@@ -103,7 +115,7 @@
 		}
 
 		const maxGap = Number(frontmatter.maxGap) || 0
-		const entrySet = new Set(entries)
+		const entryDates = new Set(entries.map((e) => e.date))
 		const gapStyle =
 			userSettings.gapStyle !== undefined
 				? userSettings.gapStyle
@@ -111,14 +123,14 @@
 
 		// Pass 1 — mark each date
 		const days = dates.map((date) => {
-			const ticked = entrySet.has(date)
+			const ticked = entryDates.has(date)
 			let gap = false
 			if (!ticked && maxGap > 0) {
 				// Gap only between consecutive entries whose gap ≤ maxGap
 				const parsed = parseISO(date)
 				for (let i = 0; i < entries.length - 1; i++) {
-					const prev = parseISO(entries[i])
-					const next = parseISO(entries[i + 1])
+					const prev = parseISO(entries[i].date)
+					const next = parseISO(entries[i + 1].date)
 					if (
 						differenceInCalendarDays(parsed, prev) > 0 &&
 						differenceInCalendarDays(next, parsed) > 0
@@ -166,13 +178,16 @@
 				// streakStart: only if the streak truly begins here
 				// (no entry within maxGap before the first visible date)
 				if (firstTickDate) {
-					const firstTickIdx = entries.indexOf(firstTickDate)
-					const prevEntry = firstTickIdx > 0 ? entries[firstTickIdx - 1] : null
+					const firstTickIdx = entries.findIndex(
+						(e) => e.date === firstTickDate,
+					)
+					const prevEntry =
+						firstTickIdx > 0 ? entries[firstTickIdx - 1] : null
 					const continuesFromBefore =
 						prevEntry &&
 						differenceInCalendarDays(
 							parseISO(firstTickDate),
-							parseISO(prevEntry),
+							parseISO(prevEntry.date),
 						) -
 							1 <=
 							maxGap
@@ -185,13 +200,15 @@
 
 				// streakEnd: only if the streak truly ends within the visible range
 				if (lastTickDate) {
-					const lastTickIdx = entries.indexOf(lastTickDate)
+					const lastTickIdx = entries.findIndex(
+						(e) => e.date === lastTickDate,
+					)
 					const nextEntry =
 						lastTickIdx < entries.length - 1 ? entries[lastTickIdx + 1] : null
 					const continuesAfter =
 						nextEntry &&
 						differenceInCalendarDays(
-							parseISO(nextEntry),
+							parseISO(nextEntry.date),
 							parseISO(lastTickDate),
 						) -
 							1 <=
@@ -206,14 +223,16 @@
 				// Count: walk backward through entries from the last visible tick
 				let count = 0
 				if (lastTickDate) {
-					const anchorIdx = entries.indexOf(lastTickDate)
+					const anchorIdx = entries.findIndex(
+						(e) => e.date === lastTickDate,
+					)
 					if (anchorIdx !== -1) {
 						count = 1
 						for (let j = anchorIdx; j > 0; j--) {
 							const gapDays =
 								differenceInCalendarDays(
-									parseISO(entries[j]),
-									parseISO(entries[j - 1]),
+									parseISO(entries[j].date),
+									parseISO(entries[j - 1].date),
 								) - 1
 							if (gapDays > maxGap) break
 							count++
@@ -232,7 +251,7 @@
 			const today = format(new Date(), 'yyyy-MM-dd')
 			const lastEntry = entries[entries.length - 1]
 			const deadlineDate = format(
-				new Date(parseISO(lastEntry).getTime() + (maxGap + 1) * 86400000),
+				new Date(parseISO(lastEntry.date).getTime() + (maxGap + 1) * 86400000),
 				'yyyy-MM-dd',
 			)
 			if (deadlineDate >= today) {
@@ -272,11 +291,13 @@
 
 	$: weeklyTotal = isNumeric
 		? normalizeNumber(
-				weeklySummaryDates.reduce(
-					(total, date) =>
-						total + (hasNumericEntry(date) ? numericEntries[date] : 0),
-					0,
-				),
+				weeklySummaryDates.reduce((total, date) => {
+					const entry = findEntry(entries, date)
+					if (entry && isFiniteNumber(entry.value)) {
+						return total + entry.value
+					}
+					return total
+				}, 0),
 			)
 		: 0
 	$: weeklyCompleted =
@@ -284,30 +305,15 @@
 		(numericWeeklyObjective === null ||
 			weeklyTotal >= numericWeeklyObjective)
 
-	const normalizeNumericEntries = (rawEntries) => {
-		if (Array.isArray(rawEntries)) {
-			return Object.fromEntries(
-				rawEntries.map((date) => [String(date), 1]),
-			)
-		}
-		if (!rawEntries || typeof rawEntries !== 'object') return {}
-
-		return Object.fromEntries(
-			Object.entries(rawEntries)
-				.map(([date, value]) => [date, Number(value)])
-				.filter(([, value]) => Number.isFinite(value)),
-		)
-	}
-
 	const init = async function () {
 		debugLog(`Loading habit ${habitName}`, debug, undefined, pluginName)
 
-		const getFrontmatter = async function (path) {
-			const file = this.app.vault.getAbstractFileByPath(path)
+		const getFrontmatter = async function (filePath) {
+			const file = app.vault.getAbstractFileByPath(filePath)
 
 			if (!file || !(file instanceof TFile)) {
 				debugLog(
-					`No file found for path: ${path}`,
+					`No file found for path: ${filePath}`,
 					debug,
 					undefined,
 					pluginName,
@@ -316,7 +322,7 @@
 			}
 
 			try {
-				return await this.app.vault.read(file).then((result) => {
+				return await app.vault.read(file).then((result) => {
 					const frontmatter = result.split('---')[1]
 
 					if (!frontmatter) {
@@ -331,7 +337,7 @@
 				})
 			} catch (error) {
 				debugLog(
-					`Error in habit ${habitName}: error.message`,
+					`Error in habit ${habitName}: ${error.message}`,
 					debug,
 					undefined,
 					pluginName,
@@ -343,27 +349,12 @@
 		frontmatter = await getFrontmatter(path)
 		debugLog(`Frontmatter for ${path} ↴`, debug)
 		debugLog(frontmatter, debug)
-		if (frontmatter.numeric === true) {
-			numericEntries = normalizeNumericEntries(frontmatter.entries)
-			entries = []
-		} else {
-			entries = Array.isArray(frontmatter.entries)
-				? frontmatter.entries.map(String).sort()
-				: []
-			numericEntries = {}
-		}
+		entries = normalizeEntries(frontmatter.entries)
 		habitName = frontmatter.title || habitName
 
-		const entryCount = isNumeric
-			? Object.keys(numericEntries).length
-			: entries.length
+		const entryCount = entries.length
 		debugLog(`Habit "${habitName}": Found ${entryCount} entries`, debug)
-		debugLog(
-			isNumeric ? numericEntries : entries,
-			debug,
-			undefined,
-			pluginName,
-		)
+		debugLog(entries, debug, undefined, pluginName)
 	}
 
 	const saveNumericEntry = async (date, value) => {
@@ -373,24 +364,23 @@
 			return
 		}
 
-		const nextEntries = {...numericEntries}
-		if (value === null) {
-			delete nextEntries[date]
-		} else {
-			nextEntries[date] = normalizeNumber(value)
-		}
-		numericEntries = Object.fromEntries(
-			Object.entries(nextEntries).sort(([a], [b]) => a.localeCompare(b)),
-		)
+		// Only ever touches the one day the user edited. Clearing (value ===
+		// null) removes the entry entirely; setting a number upserts it.
+		entries =
+			value === null
+				? removeEntry(entries, date)
+				: upsertEntry(entries, date, { value: normalizeNumber(value) })
 
 		savingChanges = true
 		await app.fileManager.processFrontMatter(file, (nextFrontmatter) => {
-			nextFrontmatter.entries = numericEntries
+			nextFrontmatter.entries = entries
 		})
 	}
 
 	const openNumericEntryModal = (date) => {
-		const currentValue = hasNumericEntry(date) ? numericEntries[date] : null
+		const currentValue = hasNumericEntry(date)
+			? findEntry(entries, date).value
+			: null
 		const displayDate = window.moment(date).format('ddd, ll')
 
 		class NumericEntryModal extends Modal {
@@ -494,23 +484,22 @@
 	}
 
 	const toggleHabit = function (date) {
-		const file = this.app.vault.getAbstractFileByPath(path)
+		const file = app.vault.getAbstractFileByPath(path)
 		if (!file || !(file instanceof TFile)) {
 			new Notice(`${pluginName}: file missing while trying to toggle habit`)
 			return
 		}
 
-		let newEntries = [...entries]
-		if (entries.includes(date)) {
-			newEntries = newEntries.filter((e) => e !== date)
-		} else {
-			newEntries.push(date)
-		}
-		entries = newEntries.sort()
+		// Pure toggle: only ever touches the one day the user clicked.
+		// If the day had a value (from a previous numeric session), it's
+		// dropped — clicking in non-numeric mode is a boolean toggle.
+		entries = hasEntry(entries, date)
+			? removeEntry(entries, date)
+			: upsertEntry(entries, date, {})
 
 		savingChanges = true
 
-		this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+		app.fileManager.processFrontMatter(file, (frontmatter) => {
 			frontmatter['entries'] = entries
 		})
 	}

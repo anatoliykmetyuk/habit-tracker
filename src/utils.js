@@ -54,5 +54,5 @@ export {
 	debugLog,
 	renderPrettyDate,
 	pluralize,
-	isValidCSSColor
+	isValidCSSColor,
 };
